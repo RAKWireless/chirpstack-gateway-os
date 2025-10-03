@@ -4,4 +4,5 @@
 	branch = openwrt-24.10
 [submodule "feeds/chirpstack-openwrt-feed"]
 	path = feeds/chirpstack-openwrt-feed
-	url = https://github.com/chirpstack/chirpstack-openwrt-feed.git
+	url = https://github.com/rakwireless/chirpstack-openwrt-feed.git
+	branch = rak_edition
