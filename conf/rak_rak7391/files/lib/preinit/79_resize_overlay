@@ -1,0 +1,71 @@
+#!/bin/sh
+# Stage 2 of 2 for rootfs expansion: make the f2fs overlay cover the full root
+# partition. Runs before 80_mount_root so the overlay f2fs is not yet mounted.
+#
+# Strategy: reformat, not resize. resize.f2fs (f2fs-tools 1.16.0) failed
+# silently on this target and left the image in a state where each retry
+# compounded the damage, eventually bricking the rootfs. mkfs.f2fs is
+# single-pass: either it succeeds and the SB block_count matches what this
+# script expects (so the next boot is a no-op), or it fails and the next
+# boot tries again — but a fresh mkfs is always recoverable.
+#
+# The reformat is destructive. This only runs on the boot after stage 1 grew
+# the partition: at that point the overlay only contains the output of the
+# previous boot's uci-defaults, which re-run from the squashfs after the wipe.
+
+resize_overlay() {
+    local part="/dev/mmcblk0p2"
+    local K="/dev/kmsg"
+
+    [ -b "$part" ] || { echo "resize_overlay: $part not found" > $K; return 0; }
+
+    # Squashfs bytes_used — low 4 bytes of the 8-byte LE field at SB offset 40.
+    local sq_used
+    sq_used=$(dd if="$part" bs=1 skip=40 count=4 2>/dev/null | hexdump -e '1/4 "%u"')
+    [ -n "$sq_used" ] && [ "$sq_used" -gt 0 ] || return 0
+
+    # ROOTDEV_OVERLAY_ALIGN (64 KB) in fstools/rootdisk.c
+    local align=65536
+    local overlay_offset=$(( (sq_used + align - 1) / align * align ))
+
+    local part_sectors
+    part_sectors=$(cat /sys/block/mmcblk0/mmcblk0p2/size 2>/dev/null)
+    [ -n "$part_sectors" ] || return 0
+    local expected_blocks=$(( (part_sectors * 512 - overlay_offset) / 4096 ))
+    [ "$expected_blocks" -gt 0 ] || return 0
+
+    # F2FS_SUPER_MAGIC = 0xF2F52010. First boot has zero bytes here — mkfs.f2fs
+    # will format the overlay during 80_mount_root, so just skip.
+    local magic
+    magic=$(dd if="$part" bs=1 skip=$(( overlay_offset + 1024 )) count=4 2>/dev/null | \
+            hexdump -e '1/4 "%08x"')
+    if [ "$magic" != "f2f52010" ]; then
+        echo "resize_overlay: no f2fs superblock yet (magic=$magic) — skip" > $K
+        return 0
+    fi
+
+    # block_count — low 4 bytes of the 8-byte LE field at SB offset 36.
+    local fs_blocks
+    fs_blocks=$(dd if="$part" bs=1 skip=$(( overlay_offset + 1024 + 36 )) count=4 2>/dev/null | \
+                hexdump -e '1/4 "%u"')
+    echo "resize_overlay: fs_blocks=$fs_blocks expected=$expected_blocks" > $K
+    [ -n "$fs_blocks" ] || return 0
+    [ "$fs_blocks" -ge "$expected_blocks" ] && { echo "resize_overlay: already sized" > $K; return 0; }
+
+    local loop_dev
+    loop_dev=$(losetup -f --show -o "$overlay_offset" "$part" 2>/dev/null)
+    [ -n "$loop_dev" ] || { echo "resize_overlay: losetup failed" > $K; return 0; }
+    echo "resize_overlay: attached $loop_dev at offset $overlay_offset" > $K
+
+    # Match the options fstools uses when it creates the overlay itself
+    # (libfstools/common.c: "mkfs.f2fs -q -f -l rootfs_data"). Stream each
+    # output line as its own kmsg record.
+    mkfs.f2fs -q -f -l rootfs_data "$loop_dev" 2>&1 | while IFS= read -r line; do
+        echo "resize_overlay[mkfs]: $line" > $K
+    done
+
+    losetup -d "$loop_dev"
+    echo "resize_overlay: done" > $K
+}
+
+resize_overlay
