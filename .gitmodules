@@ -6,3 +6,6 @@
 	path = feeds/chirpstack-openwrt-feed
 	url = https://github.com/rakwireless/chirpstack-openwrt-feed.git
 	branch = rak_edition
+[submodule "feeds/rak-openwrt-feed"]
+	path = feeds/rak-openwrt-feed
+	url = https://github.com/rakwireless/rak-openwrt-feed.git
