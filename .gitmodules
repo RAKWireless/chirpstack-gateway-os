@@ -9,3 +9,4 @@
 [submodule "feeds/rak-openwrt-feed"]
 	path = feeds/rak-openwrt-feed
 	url = https://github.com/rakwireless/rak-openwrt-feed.git
+	branch = main
