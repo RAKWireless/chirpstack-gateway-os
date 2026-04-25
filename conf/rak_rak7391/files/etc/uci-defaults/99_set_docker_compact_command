@@ -1,0 +1,11 @@
+EXISTS=$(uci show luci | grep "Compact Docker storage")
+if [ ! -z "$EXISTS" ]; then
+    return
+fi
+
+rule_name=$(uci add luci command)
+uci batch << EOI
+set luci.$rule_name.name='Compact Docker storage'
+set luci.$rule_name.command='/usr/sbin/compact-docker-storage'
+EOI
+uci commit
