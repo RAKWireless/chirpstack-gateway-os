@@ -2252,7 +2252,7 @@ body[class*="node-"] > .main > .main-left > .nav > .slide > .menu.active::before
   line-height: normal;
   min-width: inherit;
   margin: 1.25rem 0;
-  padding: 0;
+  padding: 8px;
   border: 0;
   border-radius: 0.375rem;
   background-color: #fff;
