@@ -34,7 +34,7 @@ set wireless.default_radio0=wifi-iface
 set wireless.default_radio0.device='radio0'
 set wireless.default_radio0.network='wwan'
 set wireless.default_radio0.mode='ap'
-set wireless.default_radio0.ssid="RAK-${GWID_END}"
+set wireless.default_radio0.ssid="rak-${GWID_END}"
 set wireless.default_radio0.encryption='psk2'
 set wireless.default_radio0.key='rakwireless'
 commit wireless
