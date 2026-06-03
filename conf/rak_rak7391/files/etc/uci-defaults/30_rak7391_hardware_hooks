@@ -1,0 +1,66 @@
+#!/bin/sh
+# Wire RAK7391 on-board peripherals exposed by the rak7391 device-tree
+# overlay Runs once on first boot. Idempotent — re-running is safe.
+
+. /lib/functions.sh
+
+log() { logger -t rak7391-hw "$@"; }
+
+# ---- LED trigger bindings ---------------------------------------------------
+
+if [ ! -e /sys/class/leds/rak7391:red:os ]; then
+	log "warning: rak7391:red:os not present — overlay rak7391 may not be applied"
+fi
+
+# Replace any pre-existing entries with the same name so re-runs don't pile up.
+while uci -q delete system.@led[0]; do :; done >/dev/null 2>&1
+
+uci -q batch <<'EOF'
+add system led
+set system.@led[-1].name='os'
+set system.@led[-1].sysfs='rak7391:red:os'
+set system.@led[-1].default='1'
+set system.@led[-1].trigger='heartbeat'
+
+add system led
+set system.@led[-1].name='status'
+set system.@led[-1].sysfs='rak7391:green:status'
+set system.@led[-1].default='0'
+set system.@led[-1].trigger='none'
+EOF
+uci commit system
+
+# ---- RTC sync ---------------------------------------------------------------
+# PCF85063 has battery-backed time; pull it into the system clock so chronyd /
+# sysfixtime doesn't have to wait for NTP before LoRaWAN-relevant clocks are
+# right.
+if [ -e /dev/rtc0 ]; then
+	hwclock --hctosys --rtc=/dev/rtc0 || log "warning: hwclock --hctosys failed"
+else
+	log "warning: /dev/rtc0 not present — PCF85063 driver may not be loaded"
+fi
+
+# ---- Hardware presence sanity log ------------------------------------------
+for probe in \
+	"/sys/bus/i2c/devices/1-0051:RTC PCF85063" \
+	"/sys/bus/i2c/devices/1-0070:SHTC3" \
+	"/sys/bus/i2c/devices/1-002f:EMC2301 fan controller" \
+	"/sys/bus/i2c/devices/1-0027:GPIO expander U134" \
+	"/sys/bus/i2c/devices/1-0026:GPIO expander U133" \
+; do
+	path="${probe%%:*}"
+	name="${probe#*:}"
+	if [ ! -e "$path" ]; then
+		log "missing: $name at $path"
+	fi
+done
+
+# ---- Buzzer jumper check ----------------------------------------------------
+# The buzzer only sounds when the J39.11-12 jumper is fitted (CM4 GPIO13 →
+# BUZZER net). The gpio-beeper input device shows up regardless of the
+# jumper, but a missing event device means the overlay didn't probe.
+if ! grep -q "gpio-beeper" /proc/bus/input/devices 2>/dev/null; then
+	log "warning: gpio-beeper input device not present — overlay rak7391 may not be applied"
+fi
+
+exit 0

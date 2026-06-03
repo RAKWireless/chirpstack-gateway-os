@@ -1,0 +1,200 @@
+Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391-overlay.dts
+===================================================================
+--- /dev/null
++++ openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391-overlay.dts
+@@ -0,0 +1,143 @@
++// SPDX-License-Identifier: GPL-2.0
++// RAK7391 (WisGate Connect) hardware hooks overlay.
++//
++// I2C peripherals + GPIO expanders + LEDs + power-fail key + beeper +
++// thermal trips wired to CPU thermal zone. See repo
++// .ai/001-rak7391-hardware-hooks/plan.md for the rationale and the
++// schematic reference RAK7391_VC_20240913.md for every signal.
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/input/linux-event-codes.h>
++#include <dt-bindings/thermal/thermal.h>
++
++/ {
++	compatible = "brcm,bcm2711";
++
++	fragment@0 {
++		target = <&i2c1>;
++		__overlay__ {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++
++			rtc@51 {
++				compatible = "nxp,pcf85063";
++				reg = <0x51>;
++			};
++
++			shtc3@70 {
++				compatible = "sensirion,shtc3";
++				reg = <0x70>;
++			};
++
++			emc2301: emc2301@2f {
++				compatible = "microchip,emc2301";
++				reg = <0x2f>;
++				#cooling-cells = <2>;
++			};
++
++			u134: gpio@27 {
++				compatible = "nxp,pca9555";
++				reg = <0x27>;
++				gpio-controller;
++				#gpio-cells = <2>;
++				interrupt-parent = <&gpio>;
++				interrupts = <22 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-controller;
++				#interrupt-cells = <2>;
++			};
++
++			u133: gpio@26 {
++				compatible = "nxp,pca9555";
++				reg = <0x26>;
++				gpio-controller;
++				#gpio-cells = <2>;
++				interrupt-parent = <&gpio>;
++				interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-controller;
++				#interrupt-cells = <2>;
++			};
++		};
++	};
++
++	fragment@1 {
++		target-path = "/";
++		__overlay__ {
++			leds {
++				compatible = "gpio-leds";
++
++				rak7391_os {
++					label = "rak7391:red:os";
++					gpios = <&u134 7 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++					linux,default-trigger = "heartbeat";
++				};
++
++				rak7391_status {
++					label = "rak7391:green:status";
++					gpios = <&u134 6 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++			};
++
++			keys {
++				compatible = "gpio-keys";
++				label = "power-detect";
++
++				power_detect {
++					label = "power-detect";
++					linux,code = <KEY_POWER>;
++					gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
++					debounce-interval = <50>;
++					wakeup-source;
++				};
++			};
++
++			beeper {
++				compatible = "gpio-beeper";
++				gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
++			};
++		};
++	};
++
++	fragment@2 {
++		target = <&cpu_thermal>;
++		__overlay__ {
++			polling-delay = <2000>;
++		};
++	};
++
++	fragment@3 {
++		target = <&thermal_trips>;
++		__overlay__ {
++			rak7391_fan_mid: fan-mid {
++				temperature = <55000>;
++				hysteresis = <3000>;
++				type = "active";
++			};
++			rak7391_fan_max: fan-max {
++				temperature = <75000>;
++				hysteresis = <3000>;
++				type = "active";
++			};
++		};
++	};
++
++	fragment@4 {
++		target = <&cooling_maps>;
++		__overlay__ {
++			rak7391_map_mid {
++				trip = <&rak7391_fan_mid>;
++				cooling-device = <&emc2301 2 6>;
++			};
++			rak7391_map_max {
++				trip = <&rak7391_fan_max>;
++				cooling-device = <&emc2301 7 THERMAL_NO_LIMIT>;
++			};
++		};
++	};
++};
+Index: openwrt/target/linux/bcm27xx/patches-6.6/990-rak7391-overlay.patch
+===================================================================
+--- /dev/null
++++ openwrt/target/linux/bcm27xx/patches-6.6/990-rak7391-overlay.patch
+@@ -0,0 +1,15 @@
++Subject: rak7391: register overlay in the bcm27xx overlay Makefile
++
++Adds the rak7391.dtbo entry so the kernel build emits our overlay. The
++.dts source is shipped via target/linux/bcm27xx/files-6.6/.
++
++--- a/arch/arm/boot/dts/overlays/Makefile
+++++ b/arch/arm/boot/dts/overlays/Makefile
++@@ -226,6 +226,7 @@
++ 	pwm1.dtbo \
++ 	qca7000.dtbo \
++ 	qca7000-uart0.dtbo \
+++	rak7391.dtbo \
++ 	ramoops.dtbo \
++ 	ramoops-pi4.dtbo \
++ 	rootmaster.dtbo \
+Index: openwrt/target/linux/bcm27xx/config-6.6
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/config-6.6
++++ openwrt/target/linux/bcm27xx/config-6.6
+@@ -47,3 +47,4 @@
+ # CONFIG_VIDEO_RASPBERRYPI_PISP_BE is not set
+ # CONFIG_VIDEO_RP1_CFE is not set
+ # CONFIG_WS2812_PIO_RP1 is not set
++CONFIG_RTC_DRV_PCF85063=y
+Index: openwrt/target/linux/bcm27xx/modules/hwmon.mk
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/modules/hwmon.mk
++++ openwrt/target/linux/bcm27xx/modules/hwmon.mk
+@@ -32,3 +32,18 @@
+ endef
+ 
+ $(eval $(call KernelPackage,hwmon-raspberrypi))
++
++define KernelPackage/hwmon-shtc1
++  TITLE:=Sensirion SHTC1/SHTC3 humidity+temperature sensor
++  KCONFIG:=CONFIG_SENSORS_SHTC1
++  FILES:=$(LINUX_DIR)/drivers/hwmon/shtc1.ko
++  AUTOLOAD:=$(call AutoLoad,60,shtc1)
++  $(call AddDepends/hwmon,+kmod-i2c-core)
++endef
++
++define KernelPackage/hwmon-shtc1/description
++  Kernel module for the Sensirion SHTC1, SHTW1, and SHTC3
++  humidity and temperature sensors.
++endef
++
++$(eval $(call KernelPackage,hwmon-shtc1))
