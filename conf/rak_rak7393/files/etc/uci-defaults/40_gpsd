@@ -1,0 +1,14 @@
+#!/bin/sh
+# Point gpsd at the on-board GPS module (UART5, dtoverlay=uart5) and enable
+# the service. Idempotent — re-running is safe.
+
+uci -q batch <<'EOF'
+set gpsd.core=gpsd
+set gpsd.core.device='/dev/ttyAMA5'
+set gpsd.core.enabled='1'
+commit gpsd
+EOF
+
+/etc/init.d/gpsd enable
+
+exit 0

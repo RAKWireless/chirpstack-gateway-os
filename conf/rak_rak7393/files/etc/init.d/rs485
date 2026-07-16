@@ -1,0 +1,32 @@
+#!/bin/sh /etc/rc.common
+# Apply the configured line settings to the RS485 bridge (see /etc/config/
+# rs485 and /etc/hotplug.d/usb/20-rs485 for how /dev/rs485 gets created).
+# One-shot: no daemon, just stty at boot and on reload.
+
+START=90
+
+USE_PROCD=1
+
+start_service() {
+	local device baud
+
+	config_load rs485
+	config_get device main device '/dev/rs485'
+	config_get baud main baud '9600'
+
+	if [ -e "$device" ]; then
+		stty -F "$device" "$baud" raw -echo \
+			&& logger -t rs485 "$device configured at $baud baud" \
+			|| logger -t rs485 "warning: stty on $device failed"
+	else
+		logger -t rs485 "warning: $device not present — RS485 bridge not connected?"
+	fi
+}
+
+service_triggers() {
+	procd_add_reload_trigger "rs485"
+}
+
+reload_service() {
+	start
+}

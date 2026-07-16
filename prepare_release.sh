@@ -13,3 +13,4 @@ do_prepare_connect() {
 }
 
 do_prepare_connect $1 rak bcm27xx bcm2711 cm4 rak7391
+do_prepare_connect $1 rak bcm27xx bcm2711 cm4 rak7393

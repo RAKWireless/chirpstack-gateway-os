@@ -1,0 +1,62 @@
+#!/bin/sh
+# Wire RAK7393 on-board peripherals exposed by the rak7393 device-tree
+# overlay Runs once on first boot. Idempotent — re-running is safe.
+
+. /lib/functions.sh
+
+log() { logger -t rak7393-hw "$@"; }
+
+# ---- LED trigger bindings ---------------------------------------------------
+
+if [ ! -e /sys/class/leds/rak7393:green:wlan ]; then
+	log "warning: rak7393:green:wlan not present — overlay rak7393 may not be applied"
+fi
+
+# Replace any pre-existing entries with the same name so re-runs don't pile up.
+while uci -q delete system.@led[0]; do :; done >/dev/null 2>&1
+
+uci -q batch <<'EOF'
+add system led
+set system.@led[-1].name='wlan'
+set system.@led[-1].sysfs='rak7393:green:wlan'
+set system.@led[-1].default='0'
+set system.@led[-1].trigger='netdev'
+set system.@led[-1].dev='wlan0'
+set system.@led[-1].mode='link tx rx'
+
+add system led
+set system.@led[-1].name='lora1'
+set system.@led[-1].sysfs='rak7393:green:lora1'
+set system.@led[-1].default='0'
+set system.@led[-1].trigger='none'
+
+add system led
+set system.@led[-1].name='lora2'
+set system.@led[-1].sysfs='rak7393:green:lora2'
+set system.@led[-1].default='0'
+set system.@led[-1].trigger='none'
+EOF
+uci commit system
+
+# ---- RTC sync ---------------------------------------------------------------
+# PCF85063 has battery-backed time; pull it into the system clock so chronyd /
+# sysfixtime doesn't have to wait for NTP before LoRaWAN-relevant clocks are
+# right.
+if [ -e /dev/rtc0 ]; then
+	hwclock --hctosys --rtc=/dev/rtc0 || log "warning: hwclock --hctosys failed"
+else
+	log "warning: /dev/rtc0 not present — PCF85063 driver may not be loaded"
+fi
+
+# ---- Hardware presence sanity log ------------------------------------------
+for probe in \
+	"/sys/bus/i2c/devices/1-0051:RTC PCF85063" \
+; do
+	path="${probe%%:*}"
+	name="${probe#*:}"
+	if [ ! -e "$path" ]; then
+		log "missing: $name at $path"
+	fi
+done
+
+exit 0

@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+# Mount the Docker btrfs loop file before dockerd (S99) starts. Enabled by
+# the 50_setup_docker_btrfs uci-default after first-boot setup; absent the
+# loop file, every call is a no-op and dockerd falls back to vfs.
+
+START=89
+STOP=11
+
+LOOP_FILE=/overlay/docker.btrfs
+MOUNT_POINT=/opt/docker
+
+is_mounted() {
+	grep -q " $MOUNT_POINT " /proc/mounts
+}
+
+start() {
+	[ -f "$LOOP_FILE" ] || return 0
+	is_mounted && return 0
+	mkdir -p "$MOUNT_POINT"
+	mount -o loop,compress=zstd,noatime "$LOOP_FILE" "$MOUNT_POINT" \
+		|| logger -t docker-loop "mount of $LOOP_FILE failed"
+}
+
+stop() {
+	is_mounted && umount "$MOUNT_POINT"
+}

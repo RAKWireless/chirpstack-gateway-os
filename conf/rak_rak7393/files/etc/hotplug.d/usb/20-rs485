@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# usb-subsystem handler on purpose — tty uevents carry no VID/PID
+# (review 2026-07-15). PRODUCT here looks like "1a86/7523/264" (bcdDevice
+# varies), hence the trailing-glob case match rather than a plain compare.
+
+SYMLINK="/dev/rs485"
+
+case "${PRODUCT}" in
+    1a86/7523/*)
+
+        if [ "${ACTION}" = "bind" ]; then
+
+            # The CH340 is usb-serial, so its tty sits one level deeper than
+            # the CDC-ACM case (10_rak5146.sh): under /sys/$DEVPATH/ttyUSB*.
+            DEVICE_NAME=$(ls -d /sys/$DEVPATH/ttyUSB* 2>/dev/null | head -n1 | xargs -r basename)
+            if [ "${DEVICE_NAME}" = "" ]; then
+                exit
+            fi
+
+            # Link
+            ln -sf /dev/$DEVICE_NAME ${SYMLINK}
+            logger -t Hotplug symlink from /dev/$DEVICE_NAME to ${SYMLINK} created
+
+        fi
+
+        if [ "${ACTION}" = "unbind" ]; then
+
+            # Remove the symlink only once it's actually dangling (this
+            # device may not be the one it currently points at).
+            if [ -L "${SYMLINK}" ] && [ ! -e "${SYMLINK}" ]; then
+                rm ${SYMLINK}
+                logger -t Hotplug symlink ${SYMLINK} removed
+            fi
+
+        fi
+
+    ;;
+esac
