@@ -1,0 +1,77 @@
+#!/bin/sh
+# First-boot setup for the Docker storage backend: a sparse btrfs loop file on
+# /overlay, with zstd compression and Docker's btrfs storage driver. Replaces
+# the default `vfs` driver, which has no layer sharing or compression and
+# typically takes 3-4× the reported image size on disk.
+#
+# Sizing rule: reserve MIN(50% of /, 4 GiB) for the system, give the rest to
+# the loop file as a ceiling. The file is sparse, so the cap doesn't reserve
+# blocks — it just bounds how much Docker can ever consume.
+#
+# Runs on the first boot where /overlay is at full size (i.e. after the
+# preinit overlay resize). Idempotent: a subsequent boot finds the loop file
+# and exits 0, letting the uci-defaults framework remove this script.
+#
+# Logs to /dev/kmsg, not `logger`, because uci-defaults run inside
+# /etc/init.d/boot before syslogd is up, so logger calls are silently dropped.
+
+log() { echo "docker-btrfs: $*" > /dev/kmsg; }
+
+LOOP_FILE=/overlay/docker.btrfs
+MOUNT_POINT=/opt/docker
+
+[ -f "$LOOP_FILE" ] && exit 0
+
+total_kb=$(df -k / | awk 'NR==2 {print $2}')
+[ -z "$total_kb" ] && exit 0
+total_mb=$(( total_kb / 1024 ))
+
+reserve_mb=$(( total_mb / 2 ))
+[ "$reserve_mb" -gt 4096 ] && reserve_mb=4096
+
+docker_mb=$(( total_mb - reserve_mb ))
+
+log "creating ${docker_mb}M sparse loop at $LOOP_FILE (system reserve: ${reserve_mb}M)"
+
+if ! dd if=/dev/zero of="$LOOP_FILE" bs=1M count=0 seek="$docker_mb" 2>/dev/null; then
+	log "dd failed; staying on vfs"
+	exit 0
+fi
+
+if ! mkfs.btrfs -q -L docker "$LOOP_FILE" 2>/dev/null; then
+	log "mkfs.btrfs failed; staying on vfs"
+	rm -f "$LOOP_FILE"
+	exit 0
+fi
+
+# Stop dockerd so the freshly-mounted btrfs replaces the vfs /opt/docker the
+# init script created on its first start.
+/etc/init.d/dockerd stop 2>/dev/null
+rm -rf "$MOUNT_POINT"
+mkdir -p "$MOUNT_POINT"
+
+if ! mount -o loop,compress=zstd,noatime "$LOOP_FILE" "$MOUNT_POINT"; then
+	log "mount failed; staying on vfs"
+	rmdir "$MOUNT_POINT" 2>/dev/null
+	exit 0
+fi
+
+uci -q set dockerd.globals.storage_driver=btrfs
+uci -q commit dockerd
+
+/etc/init.d/docker-loop enable
+
+# Append a weekly btrfs balance so the loop file gives free space back to the
+# rootfs after large delete/prune operations. -dusage=50 only relocates
+# near-empty data chunks, so this is cheap.
+CRON='17 3 * * 0 [ -f /overlay/docker.btrfs ] && /usr/bin/btrfs balance start -dusage=50 -musage=50 /opt/docker >/dev/null 2>&1'
+if ! grep -qF "btrfs balance start -dusage=50" /etc/crontabs/root 2>/dev/null; then
+	echo "$CRON" >> /etc/crontabs/root
+	/etc/init.d/cron restart 2>/dev/null
+fi
+
+/etc/init.d/dockerd start 2>/dev/null
+
+log "setup complete (cap: ${docker_mb}M, system reserve: ${reserve_mb}M)"
+
+exit 0

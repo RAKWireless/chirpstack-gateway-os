@@ -1,0 +1,39 @@
+#!/bin/sh
+# Compact the Docker btrfs loop file: relocate near-empty chunks so btrfs can
+# release them, then let the kernel hole-punch the freed regions back into
+# the f2fs overlay. Safe to run while Docker is up — btrfs balance is online.
+
+LOOP=/overlay/docker.btrfs
+MOUNT_POINT=/opt/docker
+
+if ! awk -v m="$MOUNT_POINT" '$2==m && $3=="btrfs" {f=1} END {exit !f}' /proc/mounts; then
+	echo "Docker storage is not on btrfs — nothing to compact."
+	exit 0
+fi
+
+[ -f "$LOOP" ] || { echo "Loop file $LOOP not found."; exit 0; }
+
+before_loop=$(du -m "$LOOP" | awk '{print $1}')
+before_root=$(df -m / | awk 'NR==2 {print $3}')
+
+echo "Loop file before: ${before_loop} MB"
+echo "Rootfs used before: ${before_root} MB"
+echo
+echo "Running btrfs balance (relocating chunks <50% full)..."
+btrfs balance start -dusage=50 -musage=50 "$MOUNT_POINT"
+sync
+
+after_loop=$(du -m "$LOOP" | awk '{print $1}')
+after_root=$(df -m / | awk 'NR==2 {print $3}')
+
+echo
+echo "Loop file after:  ${after_loop} MB"
+echo "Rootfs used after:  ${after_root} MB"
+
+freed=$(( before_loop - after_loop ))
+echo
+if [ "$freed" -gt 0 ]; then
+	echo "Reclaimed ${freed} MB."
+else
+	echo "Nothing to reclaim — already compact."
+fi

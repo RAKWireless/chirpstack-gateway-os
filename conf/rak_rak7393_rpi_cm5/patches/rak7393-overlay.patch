@@ -1,0 +1,104 @@
+Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7393-overlay.dts
+===================================================================
+--- /dev/null
++++ openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7393-overlay.dts
+@@ -0,0 +1,70 @@
++// SPDX-License-Identifier: GPL-2.0
++// RAK7393 (WisGate Connect Outdoors) hardware hooks overlay.
++//
++// RTC, user LEDs, and power-fail key wired to the CM4. See repo
++// .sdd/specs/003-connect-os-for-rak7393/plan.md for the rationale and the
++// schematic reference RAK7393_VA_2024_0425_1 for every signal.
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/linux-event-codes.h>
++
++/ {
++	compatible = "brcm,bcm2712";
++
++	fragment@0 {
++		target = <&i2c1>;
++		__overlay__ {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++
++			rtc@51 {
++				compatible = "nxp,pcf85063";
++				reg = <0x51>;
++			};
++		};
++	};
++
++	fragment@1 {
++		target-path = "/";
++		__overlay__ {
++			leds {
++				compatible = "gpio-leds";
++
++				rak7393_wlan {
++					label = "rak7393:green:wlan";
++					gpios = <&gpio 4 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++
++				rak7393_lora1 {
++					label = "rak7393:green:lora1";
++					gpios = <&gpio 5 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++
++				rak7393_lora2 {
++					label = "rak7393:green:lora2";
++					gpios = <&gpio 6 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++			};
++
++			keys {
++				compatible = "gpio-keys";
++				label = "power-detect";
++
++				power_detect {
++					label = "power-detect";
++					linux,code = <KEY_POWER>;
++					gpios = <&gpio 7 GPIO_ACTIVE_LOW>;
++					debounce-interval = <50>;
++					wakeup-source;
++				};
++			};
++		};
++	};
++};
+Index: openwrt/target/linux/bcm27xx/patches-6.6/990-rak7393-overlay.patch
+===================================================================
+--- /dev/null
++++ openwrt/target/linux/bcm27xx/patches-6.6/990-rak7393-overlay.patch
+@@ -0,0 +1,15 @@
++Subject: rak7393: register overlay in the bcm27xx overlay Makefile
++
++Adds the rak7393.dtbo entry so the kernel build emits our overlay. The
++.dts source is shipped via target/linux/bcm27xx/files-6.6/.
++
++--- a/arch/arm/boot/dts/overlays/Makefile
+++++ b/arch/arm/boot/dts/overlays/Makefile
++@@ -226,6 +226,7 @@
++ 	pwm1.dtbo \
++ 	qca7000.dtbo \
++ 	qca7000-uart0.dtbo \
+++	rak7393.dtbo \
++ 	ramoops.dtbo \
++ 	ramoops-pi4.dtbo \
++ 	rootmaster.dtbo \
+Index: openwrt/target/linux/bcm27xx/config-6.6
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/config-6.6
++++ openwrt/target/linux/bcm27xx/config-6.6
+@@ -47,3 +47,4 @@
+ # CONFIG_VIDEO_RASPBERRYPI_PISP_BE is not set
+ # CONFIG_VIDEO_RP1_CFE is not set
+ # CONFIG_WS2812_PIO_RP1 is not set
++CONFIG_RTC_DRV_PCF85063=y

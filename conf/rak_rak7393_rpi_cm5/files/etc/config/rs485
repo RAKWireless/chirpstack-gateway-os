@@ -1,0 +1,3 @@
+config rs485 'main'
+	option device '/dev/rs485'
+	option baud '9600'

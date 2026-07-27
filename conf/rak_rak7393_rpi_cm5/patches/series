@@ -1,0 +1,6 @@
+no-uart-console.patch
+boot-config.patch
+add_designware_spi_kmod.patch
+rak7393-overlay.patch
+image-with-padded-rootfs.patch
+image-name-rpi-cm5.patch

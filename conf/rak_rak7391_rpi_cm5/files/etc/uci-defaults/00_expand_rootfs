@@ -1,0 +1,37 @@
+#!/bin/sh
+# Stage 1 of 2 for rootfs expansion: grow the root partition to fill the disk,
+# then reboot. Stage 2 (/lib/preinit/79_resize_overlay) grows the f2fs overlay
+# on the next boot.
+#
+# Runs automatically on first boot. A boot that already finds the partition at
+# full size exits 0 (letting the uci-default framework remove the script),
+# so this is also a safe no-op after subsequent reboots or sysupgrades.
+
+ROOT_BLK="$(readlink -f /sys/dev/block/"$(awk \
+    '$9=="/dev/root" {print $3}' /proc/self/mountinfo)")"
+ROOT_DISK="/dev/$(basename "${ROOT_BLK%/*}")"
+ROOT_PART="${ROOT_BLK##*[^0-9]}"
+DISK_BASE=$(basename "$ROOT_DISK")
+PART_BASE=$(basename "$ROOT_BLK")
+
+DISK_SECT=$(cat "/sys/block/$DISK_BASE/size" 2>/dev/null)
+PART_START=$(cat "/sys/block/$DISK_BASE/$PART_BASE/start" 2>/dev/null)
+PART_SECT=$(cat "/sys/block/$DISK_BASE/$PART_BASE/size" 2>/dev/null)
+[ -n "$DISK_SECT" ] && [ -n "$PART_START" ] && [ -n "$PART_SECT" ] || exit 0
+
+FREE=$(( DISK_SECT - PART_START - PART_SECT ))
+
+# Skip if less than 64 MB of unallocated space follows the root partition
+[ "$FREE" -lt 131072 ] && exit 0
+
+lock -n /var/lock/root-resize || exit 0
+
+# sfdisk (not parted) preserves the MBR disk signature, so PARTUUID in
+# /boot/cmdline.txt stays valid across the resize.
+echo ",+" | sfdisk --no-reread -N "$ROOT_PART" "$ROOT_DISK" || exit 0
+sync
+
+# reboot -f goes straight to reboot(RB_AUTOBOOT) — never returns, so no other
+# uci-default runs after this. A soft "reboot" deadlocks here because we're
+# inside /etc/init.d/boot and procd queues the reboot until boot completes.
+reboot -f

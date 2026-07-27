@@ -14,3 +14,5 @@ do_prepare_connect() {
 
 do_prepare_connect $1 rak bcm27xx bcm2711 rpi-cm4 rak7391
 do_prepare_connect $1 rak bcm27xx bcm2711 rpi-cm4 rak7393
+do_prepare_connect $1 rak bcm27xx bcm2712 rpi-cm5 rak7391
+do_prepare_connect $1 rak bcm27xx bcm2712 rpi-cm5 rak7393
