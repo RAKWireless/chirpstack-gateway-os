@@ -2,13 +2,14 @@ Index: openwrt/target/linux/bcm27xx/image/config.txt
 ===================================================================
 --- openwrt.orig/target/linux/bcm27xx/image/config.txt
 +++ openwrt/target/linux/bcm27xx/image/config.txt
-@@ -11,4 +11,9 @@
+@@ -11,4 +11,10 @@
  include distroconfig.txt
  
  [all]
 -# Place your custom settings here.
 +dtparam=i2c1=on
 +dtparam=i2c_arm=on
++dtparam=i2c_arm_baudrate=400000
 +enable_uart=1
 +dtoverlay=dwc2
 +dtoverlay=uart5
