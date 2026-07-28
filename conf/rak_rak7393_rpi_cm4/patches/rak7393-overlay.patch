@@ -97,8 +97,12 @@ Index: openwrt/target/linux/bcm27xx/config-6.6
 ===================================================================
 --- openwrt.orig/target/linux/bcm27xx/config-6.6
 +++ openwrt/target/linux/bcm27xx/config-6.6
-@@ -47,3 +47,4 @@
+@@ -47,3 +47,8 @@
  # CONFIG_VIDEO_RASPBERRYPI_PISP_BE is not set
  # CONFIG_VIDEO_RP1_CFE is not set
  # CONFIG_WS2812_PIO_RP1 is not set
++CONFIG_RTC_CLASS=y
 +CONFIG_RTC_DRV_PCF85063=y
++CONFIG_RTC_HCTOSYS=y
++CONFIG_RTC_HCTOSYS_DEVICE="rtc0"
++CONFIG_RTC_I2C_AND_SPI=y
