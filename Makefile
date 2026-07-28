@@ -1,4 +1,4 @@
-.PHONY: build clean init update devshell show-envs switch-env
+.PHONY: build clean init update devshell show-envs switch-env patches
 
 # Build the OpenWrt image.
 # Note: execute this within the devshell.
@@ -14,6 +14,7 @@ init:
 	ln -s ../conf/files openwrt/files
 	docker compose run --rm chirpstack-gateway-os openwrt/scripts/feeds update -a
 	docker compose run --rm chirpstack-gateway-os openwrt/scripts/feeds install -a
+	patches/apply.sh
 	docker compose run --rm chirpstack-gateway-os quilt init
 
 # Update OpenWrt + package feeds.
@@ -23,6 +24,11 @@ update:
 	cd openwrt && \
 		./scripts/feeds update -a && \
 		./scripts/feeds install -a
+	patches/apply.sh
+
+# Apply build-env patches to the feeds (also auto-run by init/update).
+patches:
+	patches/apply.sh
 
 # Activate the devshell.
 devshell:
