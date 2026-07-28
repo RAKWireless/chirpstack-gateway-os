@@ -1,0 +1,12 @@
+Index: openwrt/target/linux/bcm27xx/image/Makefile
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/image/Makefile
++++ openwrt/target/linux/bcm27xx/image/Makefile
+@@ -174,6 +174,7 @@ ifeq ($(SUBTARGET),bcm2710)
+ endif
+
+ define Device/rpi-4
++  DEVICE_IMG_PREFIX := $(VERSION_DIST_SANITIZED)-$(IMG_PREFIX_VERNUM)$(IMG_PREFIX_VERCODE)$(IMG_PREFIX_EXTRA)rpi-cm4
+   DEVICE_MODEL := 4B/400/CM4
+   DEVICE_VARIANT := (64bit)
+   KERNEL_IMG := kernel8.img

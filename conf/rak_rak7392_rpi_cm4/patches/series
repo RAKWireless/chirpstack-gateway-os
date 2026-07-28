@@ -1,0 +1,5 @@
+no-uart-console.patch
+boot-config.patch
+rak7392-overlay.patch
+image-with-padded-rootfs.patch
+image-name-rpi-cm4.patch

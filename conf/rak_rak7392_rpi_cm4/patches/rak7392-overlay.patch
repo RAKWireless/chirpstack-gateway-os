@@ -1,0 +1,122 @@
+Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7392-overlay.dts
+===================================================================
+--- /dev/null
++++ openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7392-overlay.dts
+@@ -0,0 +1,84 @@
++// SPDX-License-Identifier: GPL-2.0
++// RAK7392 (WisGate Connect Router) hardware hooks overlay.
++//
++// RTC, USER RGB LED and reset button wired to the CM4. See repo
++// .sdd/specs/008-rak7392-support/plan.md for the rationale and the
++// schematic references RAK7392_VA_20220505 (bench unit) and _VB_20250804.
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/linux-event-codes.h>
++
++/ {
++	compatible = "brcm,bcm2711";
++
++	fragment@0 {
++		target = <&i2c1>;
++		__overlay__ {
++			#address-cells = <1>;
++			#size-cells = <0>;
++			status = "okay";
++
++			rtc@51 {
++				compatible = "nxp,pcf85063";
++				reg = <0x51>;
++			};
++		};
++	};
++
++	fragment@1 {
++		target-path = "/";
++		__overlay__ {
++			leds {
++				compatible = "gpio-leds";
++
++				rak7392_red {
++					label = "rak7392:red:user";
++					gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++
++				rak7392_green {
++					label = "rak7392:green:user";
++					gpios = <&gpio 19 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++
++				rak7392_blue {
++					label = "rak7392:blue:user";
++					gpios = <&gpio 20 GPIO_ACTIVE_LOW>;
++					default-state = "off";
++				};
++			};
++
++			keys {
++				compatible = "gpio-keys";
++				label = "reset";
++				pinctrl-names = "default";
++				pinctrl-0 = <&rak7392_key_pins>;
++
++				reset {
++					label = "reset";
++					linux,code = <KEY_RESTART>;
++					gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
++					debounce-interval = <50>;
++				};
++			};
++		};
++	};
++
++	// Defensive only: GPIO16 already measures "in hi" without this, so
++	// the bias just drops the dependency on a firmware pinctrl default.
++	fragment@2 {
++		target = <&gpio>;
++		__overlay__ {
++			rak7392_key_pins: rak7392_key_pins {
++				brcm,pins = <16>;
++				brcm,function = <0>;	// input
++				brcm,pull = <2>;	// pull up
++			};
++		};
++	};
++};
+Index: openwrt/target/linux/bcm27xx/patches-6.6/990-rak7392-overlay.patch
+===================================================================
+--- /dev/null
++++ openwrt/target/linux/bcm27xx/patches-6.6/990-rak7392-overlay.patch
+@@ -0,0 +1,15 @@
++Subject: rak7392: register overlay in the bcm27xx overlay Makefile
++
++Adds the rak7392.dtbo entry so the kernel build emits our overlay. The
++.dts source is shipped via target/linux/bcm27xx/files-6.6/.
++
++--- a/arch/arm/boot/dts/overlays/Makefile
+++++ b/arch/arm/boot/dts/overlays/Makefile
++@@ -226,6 +226,7 @@
++ 	pwm1.dtbo \
++ 	qca7000.dtbo \
++ 	qca7000-uart0.dtbo \
+++	rak7392.dtbo \
++ 	ramoops.dtbo \
++ 	ramoops-pi4.dtbo \
++ 	rootmaster.dtbo \
+Index: openwrt/target/linux/bcm27xx/config-6.6
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/config-6.6
++++ openwrt/target/linux/bcm27xx/config-6.6
+@@ -47,3 +47,8 @@
+ # CONFIG_VIDEO_RASPBERRYPI_PISP_BE is not set
+ # CONFIG_VIDEO_RP1_CFE is not set
+ # CONFIG_WS2812_PIO_RP1 is not set
++CONFIG_RTC_CLASS=y
++CONFIG_RTC_DRV_PCF85063=y
++CONFIG_RTC_HCTOSYS=y
++CONFIG_RTC_HCTOSYS_DEVICE="rtc0"
++CONFIG_RTC_I2C_AND_SPI=y

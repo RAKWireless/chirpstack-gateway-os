@@ -1,0 +1,11 @@
+. /lib/functions/rak-identity.sh
+
+if [ "$(uci -q get system.@system[0].hostname)" != "OpenWrt" ]; then
+    exit 0
+fi
+
+GWID_END=$(rak_identity_gwid_end)
+
+uci set system.@system[0].hostname="rak-${GWID_END}"
+uci commit system
+echo $(uci get system.@system[0].hostname) > /proc/sys/kernel/hostname

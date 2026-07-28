@@ -1,0 +1,5 @@
+if [ ! -f /etc/chirpstack-concentratord/sx1302/examples/region_cn470.toml ]
+then
+    cp /etc/chirpstack-concentratord/sx1301/examples/region_cn470.toml /etc/chirpstack-concentratord/sx1302/examples/
+    cp /etc/chirpstack-concentratord/sx1301/examples/channels_cn470*.toml /etc/chirpstack-concentratord/sx1302/examples/
+fi

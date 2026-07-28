@@ -1,0 +1,27 @@
+. /lib/functions/rak-identity.sh
+
+if ! uci get wireless; then
+    exit 0
+fi
+
+if [ "$(uci -q get wireless.default_radio0.ssid)" != "OpenWrt" ]; then
+    exit 0
+fi
+
+GWID_END=$(rak_identity_gwid_end)
+
+# The RAK7392 is a router, so the AP joins the lan bridge: Wi-Fi clients share
+# the lan DHCP pool and route out through the wan. No separate wwan network,
+# pool or masquerade like on the 7391/7393.
+uci -q batch << EOI
+delete wireless.radio0.disabled
+set wireless.default_radio0=wifi-iface
+set wireless.default_radio0.device='radio0'
+set wireless.default_radio0.network='lan'
+set wireless.default_radio0.mode='ap'
+set wireless.default_radio0.ssid="rak-${GWID_END}"
+set wireless.default_radio0.encryption='psk2'
+set wireless.default_radio0.key='rakwireless'
+commit wireless
+
+EOI

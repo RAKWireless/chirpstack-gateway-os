@@ -1,0 +1,13 @@
+#!/bin/sh
+# Split rak-mioty's two firewall roles, which only coincide on a flat gateway.
+# On this router the EdgeCard's egress (forwarding + masquerade) has to leave
+# through wan, while its dashboard/MQTT DNAT redirects must accept connections
+# from lan only — leaving those on wan would port-forward the EdgeCard's
+# unauthenticated config API to the internet.
+# Idempotent — re-running is safe.
+
+uci -q set rak-mioty.connection.upstream_zone='wan'
+uci -q set rak-mioty.connection.redirect_zone='lan'
+uci -q commit rak-mioty
+
+exit 0

@@ -1,0 +1,19 @@
+Index: openwrt/target/linux/bcm27xx/image/config.txt
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/image/config.txt
++++ openwrt/target/linux/bcm27xx/image/config.txt
+@@ -11,4 +11,13 @@
+ include distroconfig.txt
+ 
+ [all]
+-# Place your custom settings here.
++dtparam=i2c1=on
++dtparam=i2c_arm=on
++dtparam=i2c_arm_baudrate=400000
++enable_uart=1
++# GPIO7 is WisBlock_RESET here, not spi0 CS1: only CE0 reaches the card slot
++dtoverlay=spi0-1cs
++dtoverlay=dwc2,dr_mode=host
++# Free here (GPIO12/13 have no other use); keeps the SPI-card GPS path open
++dtoverlay=uart5
++dtoverlay=rak7392

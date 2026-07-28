@@ -1,0 +1,51 @@
+# Copyright (C) 2014-2016 OpenWrt.org
+# Copyright (C) 2017 LEDE project
+
+. /lib/functions/uci-defaults.sh
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+# The RAK7392 is a router: the 2.5G RTL8125 (r8125) is the WAN, the CM4-native
+# GbE (bcmgenet) and both RTL8111H (r8169) are bridged as LAN.
+#
+# Kernel names are never hardcoded here: r8125 and r8169 race for eth1..eth3 at
+# probe time, and a hot-plugged mioty EdgeCard adds a netdev of its own, so the
+# devices are resolved by driver instead (RQ-018). Resolution is kept local
+# rather than sourced from /lib/functions/rak-identity.sh so board_detect stays
+# self-contained.
+
+# Space-separated list of netdevs bound to any of the drivers named in $@;
+# empty if there are none.
+devs_by_driver() {
+	local dev drv want out=""
+
+	for dev in /sys/class/net/*; do
+		[ -L "$dev/device/driver" ] || continue
+		drv=$(readlink "$dev/device/driver")
+		for want in "$@"; do
+			[ "${drv##*/}" = "$want" ] || continue
+			out="${out:+$out }${dev##*/}"
+			break
+		done
+	done
+
+	echo "$out"
+}
+
+wan_dev=$(devs_by_driver r8125)
+wan_dev="${wan_dev%% *}"	# one device only, or config_generate builds a br-wan
+lan_devs=$(devs_by_driver bcmgenet r8169)
+
+[ -n "$wan_dev" ] || echo "02_network: no r8125 netdev, leaving wan unconfigured" >&2
+
+if [ -z "$lan_devs" ]; then
+	echo "02_network: no bcmgenet/r8169 netdev, falling back to eth0 for lan" >&2
+	lan_devs="eth0"
+fi
+
+board_config_update
+[ -n "$wan_dev" ] && ucidef_set_interface_wan "$wan_dev" "dhcp"
+ucidef_set_interface_lan "$lan_devs" "static"	# bridge, 192.168.1.1/24
+board_config_flush
+
+exit 0
