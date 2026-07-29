@@ -1,0 +1,54 @@
+#!/bin/sh
+# Point the concentratord consumers at slot 1.
+#
+# This board runs slot-based concentratord instances, so
+# ipc:///tmp/concentratord_event -- the socket a single-slot board binds -- is
+# never created here. Two consumers can still be aimed at it:
+#
+#   chirpstack-gateway-mesh   ships one config for every board, and its default
+#                             has to stay single-slot because the same package
+#                             also ships on the RAK7267, LPS8N and SensCap M2.
+#                             This script is what corrects it here.
+#
+#   rak-basicstation          now defaults to slot1 in the package itself (it
+#                             ships only on the RAK7391/7392/7393), so this is
+#                             only a migration for units flashed before that
+#                             change. Its LuCI dropdown no longer offers the
+#                             single-slot socket, so a stale value would sit
+#                             there unselectable.
+#
+# Everything points at slot1, including the mesh backend: a two-slot board
+# usually has just one concentrator fitted, so slot2 is opt-in.
+#
+# Only the known-bad single-slot value is replaced. uci-defaults re-run on every
+# sysupgrade -- the config backup never carries /etc/uci-defaults, so the overlay
+# comes back without the deletion -- and an unconditional write would stomp an
+# operator who had deliberately selected a different slot.
+
+SINGLE_EVENT="ipc:///tmp/concentratord_event"
+
+SLOT1_EVENT="ipc:///tmp/concentratord_slot1_event"
+SLOT1_COMMAND="ipc:///tmp/concentratord_slot1_command"
+
+# retarget <event_url option> <command_url option>
+retarget() {
+    [ "$(uci -q get "$1")" = "$SINGLE_EVENT" ] || return 0
+    uci set "$1=$SLOT1_EVENT"
+    uci set "$2=$SLOT1_COMMAND"
+}
+
+if uci -q get rak-basicstation.backend >/dev/null; then
+    retarget rak-basicstation.backend.concentratord_event_url \
+             rak-basicstation.backend.concentratord_command_url
+    uci commit rak-basicstation
+fi
+
+if uci -q get chirpstack-gateway-mesh.backend_concentratord >/dev/null; then
+    retarget chirpstack-gateway-mesh.backend_concentratord.event_url \
+             chirpstack-gateway-mesh.backend_concentratord.command_url
+    retarget chirpstack-gateway-mesh.backend_mesh_concentratord.event_url \
+             chirpstack-gateway-mesh.backend_mesh_concentratord.command_url
+    uci commit chirpstack-gateway-mesh
+fi
+
+exit 0
