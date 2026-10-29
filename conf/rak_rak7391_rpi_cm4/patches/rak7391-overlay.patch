@@ -2,7 +2,7 @@ Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391
 ===================================================================
 --- /dev/null
 +++ openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391-overlay.dts
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,147 @@
 +// SPDX-License-Identifier: GPL-2.0
 +// RAK7391 (WisGate Connect) hardware hooks overlay.
 +//
@@ -95,7 +95,11 @@ Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391
 +
 +				power_detect {
 +					label = "power-detect";
-+					linux,code = <KEY_POWER>;
++					// Not KEY_POWER: OpenWrt's button-hotplug maps that code to
++					// /etc/rc.button/power, which powers off on key release, so
++					// the gateway would switch itself off whenever the supply
++					// came back. Consumers such as rak-oled find the device by this code.
++					linux,code = <KEY_PROG1>;
 +					gpios = <&gpio 16 GPIO_ACTIVE_LOW>;
 +					debounce-interval = <50>;
 +					wakeup-source;
