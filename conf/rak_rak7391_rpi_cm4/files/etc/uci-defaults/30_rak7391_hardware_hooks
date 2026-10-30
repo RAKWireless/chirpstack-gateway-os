@@ -56,11 +56,11 @@ for probe in \
 done
 
 # ---- Buzzer jumper check ----------------------------------------------------
-# The buzzer only sounds when the J39.11-12 jumper is fitted (CM4 GPIO13 →
-# BUZZER net). The gpio-beeper input device shows up regardless of the
-# jumper, but a missing event device means the overlay didn't probe.
-if ! grep -q "gpio-beeper" /proc/bus/input/devices 2>/dev/null; then
-	log "warning: gpio-beeper input device not present — overlay rak7391 may not be applied"
+# The buzzer only sounds when the J39.11-12 jumper is fitted (GPIO13 → BUZZER
+# net). The pwm-beeper input device shows up regardless of the jumper, but a
+# missing one means the overlay didn't probe.
+if ! grep -q 'Name="pwm-beeper"' /proc/bus/input/devices 2>/dev/null; then
+	log "warning: pwm-beeper input device not present — overlay rak7391 may not be applied"
 fi
 
 exit 0

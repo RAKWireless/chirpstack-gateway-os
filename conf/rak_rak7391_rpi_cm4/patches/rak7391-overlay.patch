@@ -2,14 +2,13 @@ Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391
 ===================================================================
 --- /dev/null
 +++ openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391-overlay.dts
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,172 @@
 +// SPDX-License-Identifier: GPL-2.0
 +// RAK7391 (WisGate Connect) hardware hooks overlay.
 +//
-+// I2C peripherals + GPIO expanders + LEDs + power-fail key + beeper +
-+// thermal trips wired to CPU thermal zone. See repo
-+// .ai/001-rak7391-hardware-hooks/plan.md for the rationale and the
-+// schematic reference RAK7391_VC_20240913.md for every signal.
++// I2C peripherals + GPIO expanders + LEDs + power-fail key + PWM beeper +
++// thermal trips wired to CPU thermal zone. Pin assignments follow the
++// RAK7391 schematic.
 +
 +/dts-v1/;
 +/plugin/;
@@ -106,9 +105,15 @@ Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391
 +				};
 +			};
 +
++			// The transducer is passive and needs a tone, which gpio-beeper cannot
++			// produce (it only holds a steady level). GPIO13 carries PWM0 channel 1.
++			// The driver sets the real period on every tone request, so the
++			// 250000 ns (4 kHz) in pwms is only the initial value; beeper-hz is
++			// the pitch of a plain bell.
 +			beeper {
-+				compatible = "gpio-beeper";
-+				gpios = <&gpio 13 GPIO_ACTIVE_HIGH>;
++				compatible = "pwm-beeper";
++				pwms = <&pwm 1 250000 0>;
++				beeper-hz = <4000>;
 +			};
 +		};
 +	};
@@ -147,6 +152,26 @@ Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7391
 +				trip = <&rak7391_fan_max>;
 +				cooling-device = <&emc2301 7 THERMAL_NO_LIMIT>;
 +			};
++		};
++	};
++
++	// GPIO13 to PWM0 channel 1 (Alt0).
++	fragment@5 {
++		target = <&gpio>;
++		__overlay__ {
++			beeper_pins: beeper_pins {
++				brcm,pins = <13>;
++				brcm,function = <4>;
++			};
++		};
++	};
++
++	fragment@6 {
++		target = <&pwm>;
++		__overlay__ {
++			pinctrl-names = "default";
++			pinctrl-0 = <&beeper_pins>;
++			status = "okay";
 +		};
 +	};
 +};
@@ -206,3 +231,29 @@ Index: openwrt/target/linux/bcm27xx/modules/hwmon.mk
 +endef
 +
 +$(eval $(call KernelPackage,hwmon-shtc1))
+Index: openwrt/target/linux/bcm27xx/modules/other.mk
+===================================================================
+--- openwrt.orig/target/linux/bcm27xx/modules/other.mk
++++ openwrt/target/linux/bcm27xx/modules/other.mk
+@@ -139,3 +139,21 @@
+ endef
+ 
+ $(eval $(call KernelPackage,rp1-mailbox))
++
++
++define KernelPackage/input-pwm-beeper
++  SUBMENU:=$(OTHER_MENU)
++  TITLE:=PWM beeper support
++  KCONFIG:= \
++    CONFIG_INPUT_MISC=y \
++    CONFIG_INPUT_PWM_BEEPER
++  FILES:=$(LINUX_DIR)/drivers/input/misc/pwm-beeper.ko
++  AUTOLOAD:=$(call AutoLoad,50,pwm-beeper)
++  DEPENDS:=@TARGET_bcm27xx +kmod-input-core
++endef
++
++define KernelPackage/input-pwm-beeper/description
++  This enables playing beeps and tones through a PWM-driven buzzer.
++endef
++
++$(eval $(call KernelPackage,input-pwm-beeper))
