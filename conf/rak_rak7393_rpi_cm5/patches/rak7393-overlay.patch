@@ -2,13 +2,12 @@ Index: openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7393
 ===================================================================
 --- /dev/null
 +++ openwrt/target/linux/bcm27xx/files-6.6/arch/arm/boot/dts/overlays/rak7393-overlay.dts
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,73 @@
 +// SPDX-License-Identifier: GPL-2.0
 +// RAK7393 (WisGate Connect Outdoors) hardware hooks overlay.
 +//
-+// RTC, user LEDs, and power-fail key wired to the CM4. See repo
-+// .sdd/specs/003-connect-os-for-rak7393/plan.md for the rationale and the
-+// schematic reference RAK7393_VA_2024_0425_1 for every signal.
++// RTC, user LEDs, and power-fail key wired to the CM4. Pin assignments
++// follow the RAK7393 schematic.
 +
 +/dts-v1/;
 +/plugin/;

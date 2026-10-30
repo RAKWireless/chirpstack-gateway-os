@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# usb-subsystem handler on purpose — tty uevents carry no VID/PID
-# (review 2026-07-15). PRODUCT here looks like "1a86/7523/264" (bcdDevice
-# varies), hence the trailing-glob case match rather than a plain compare.
+# usb-subsystem handler on purpose — tty uevents carry no VID/PID.
+# PRODUCT here looks like "1a86/7523/264" (bcdDevice varies), hence the
+# trailing-glob case match rather than a plain compare.
 
 SYMLINK="/dev/rs485"
 
