@@ -1,0 +1,68 @@
+#!/bin/sh
+
+# Each WisBlock slot has its own CH340 UART bridge, and both bridges hang off
+# the board's 4-port FE1.1s hub. They are the same chip, so VID/PID cannot
+# tell them apart; the hub port can: port 3 is slot 1 (/dev/wisblock1) and
+# port 4 is slot 2 (/dev/wisblock2).
+#
+# usb-subsystem handler on purpose — tty uevents carry no VID/PID.
+# PRODUCT here looks like "1a86/7523/264" (bcdDevice varies), hence the
+# trailing-glob case match rather than a plain compare.
+
+HUB_VID="1a40"
+HUB_PID="0101"
+
+case "${PRODUCT}" in
+    1a86/7523/*)
+
+        if [ "${ACTION}" = "bind" ]; then
+
+            # The CH340 is usb-serial, so its tty sits under the interface:
+            # /sys/$DEVPATH/ttyUSB*.
+            DEVICE_NAME=$(ls -d /sys/$DEVPATH/ttyUSB* 2>/dev/null | head -n1 | xargs -r basename)
+            if [ "${DEVICE_NAME}" = "" ]; then
+                exit
+            fi
+
+            # $DEVPATH is the interface. Its parent is the CH340 itself and
+            # that one's parent is the hub it is plugged into.
+            CH340="/sys/$DEVPATH/.."
+            HUB="${CH340}/.."
+
+            # Only a CH340 on the board's own hub gets a slot name, so a
+            # serial dongle in a front USB port never takes /dev/wisblockN.
+            if [ "$(cat ${HUB}/idVendor 2>/dev/null)" != "${HUB_VID}" ] ||
+               [ "$(cat ${HUB}/idProduct 2>/dev/null)" != "${HUB_PID}" ]; then
+                exit
+            fi
+
+            # devpath is the port chain below the root hub, e.g. "1.3". The
+            # board's hub sits directly on a root port; the same hub chip in an
+            # external hub further down the chain never matches.
+            case "$(cat ${CH340}/devpath 2>/dev/null)" in
+                [0-9].3) SYMLINK="/dev/wisblock1" ;;
+                [0-9].4) SYMLINK="/dev/wisblock2" ;;
+                *) exit ;;
+            esac
+
+            # Link
+            ln -sf /dev/$DEVICE_NAME ${SYMLINK}
+            logger -t Hotplug symlink from /dev/$DEVICE_NAME to ${SYMLINK} created
+
+        fi
+
+        if [ "${ACTION}" = "unbind" ]; then
+
+            # Remove a link only once it's actually dangling (this device
+            # may not be the one it currently points at).
+            for SYMLINK in /dev/wisblock1 /dev/wisblock2; do
+                if [ -L "${SYMLINK}" ] && [ ! -e "${SYMLINK}" ]; then
+                    rm ${SYMLINK}
+                    logger -t Hotplug symlink ${SYMLINK} removed
+                fi
+            done
+
+        fi
+
+    ;;
+esac

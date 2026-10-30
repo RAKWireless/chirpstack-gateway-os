@@ -1,0 +1,24 @@
+#!/bin/sh
+# RAK7391 defaults for the rak-power battery monitor.
+#
+# The package points the battery monitor at /dev/rs485, a port this board does
+# not have. Here a battery is reached through an RS485 module in a WisBlock
+# slot, and that slot's serial port is also the slot's console, so polling it
+# unasked would push Modbus frames into whatever WisBlock core sits there.
+# The monitor therefore ships off, aimed at slot 1; enable it in the rak-power
+# settings once a battery module is fitted (and pick slot 2 if that is where
+# it is).
+#
+# The port is only rewritten while it still holds the package value, so a
+# choice made by the operator survives a sysupgrade (uci-defaults run again
+# after every flash).
+
+[ "$(uci -q get rak-power.battery.port)" = "/dev/rs485" ] || exit 0
+
+uci -q batch <<'EOT'
+set rak-power.battery.enabled=0
+set rak-power.battery.port=/dev/wisblock1
+commit rak-power
+EOT
+
+exit 0
